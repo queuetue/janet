@@ -1,0 +1,33 @@
+[project]
+name = "janet"
+version = "1.0.0"
+description = "Janet CLI and library for plan management (Plantangenet)"
+authors = [
+    { name = "Scott Russell (Queuetue)", email = "scott@queuetue.com" }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "pyyaml",
+    "jsonschema"
+]
+
+[tool.setuptools]
+packages = ["janet"]
+
+[project.scripts]
+janet = "janet.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "B", "C", "D", "N", "S", "T", "UP", "YTT", "RUF"]
+ignore = ["E501"]
+exclude = [".venv", "__pycache__", "build", "dist", "janet.egg-info"]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"

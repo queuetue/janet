@@ -1,0 +1,43 @@
+apiVersion: plantangenet.policy/v1
+kind: Role
+metadata:
+  annotations:
+    description: Owner of the TTT game
+    displayName: Game Administrator
+spec:
+  name: owner
+  phase: setup
+  policyBinding: ttt
+  identities:
+    immutable:
+      - owner
+    matchLabels:
+      session: ttt
+---
+apiVersion: plantangenet.policy/v1
+kind: Role
+metadata:
+  annotations:  
+    description: The Everyone Wildcard role
+    displayName: Wildcard Role
+spec:
+  name: all-access
+  phase: setup
+  policyBinding: ttt
+  identities:
+    immutable:
+      - owner
+    matchLabels:
+      session: ttt
+---
+apiVersion: plantangenet.policy/v1
+kind: Role
+metadata:
+  annotations:
+    description: The Nobody role
+    displayName: Nobody Role
+spec:
+  name: nobody
+  phase: setup
+  policyBinding: ttt
+  identities: null

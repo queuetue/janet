@@ -1,0 +1,69 @@
+apiVersion: plantangenet.session/v1
+kind: Session
+metadata:
+  description: Session for the TTT game 
+  phase: setup
+  name: ttt
+  displayName: *session_name
+  labels:
+    session: ttt
+spec:
+  policies:
+    selector:
+      sessionRef: ttt
+  arenas:
+    selector:
+      matchLabels:
+        session: ttt
+        squad: arena
+  referees:
+    selector:
+      matchLabels:
+        session: ttt
+        squad: referee
+  players:
+    selector:
+      matchLabels:
+        session: ttt
+        squad: player
+---
+apiVersion: plantangenet.session/v1
+kind: Squad
+metadata:
+  name: arena-squad
+  phase: lazy
+  labels:
+    squad: arena
+    session: ttt
+  annotations:
+    createdBy: scott@queuetue.com
+spec:
+  session_id: *session_id
+  class: example.tictactoe.Arena/v0.0.331
+  max_members: *concurrent_games
+---
+apiVersion: plantangenet.session/v1
+kind: Squad
+metadata:
+  name: referee-squad
+  phase: lazy
+  labels:
+    session: ttt
+    squad: referee
+spec:
+  session_id: *session_id
+  class: example.tictactoe.Referee/v0.22
+  max_members: *concurrent_games
+---
+apiVersion: plantangenet.session/v1
+kind: Squad
+metadata:
+  name: players-squad
+  phase: lazy
+  labels:
+    session: ttt
+    squad: player
+spec:
+  session_id: *session_id
+  class: example.tictactoe.Player/v0.0.1
+  max_members: *concurrent_players

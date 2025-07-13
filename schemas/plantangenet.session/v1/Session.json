@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Session Resource",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "type": "string", "enum": ["plantangenet.session/v1"] },
+    "kind": { "type": "string", "enum": ["Session"] },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "phase"],
+      "properties": {
+        "name": { "type": "string" },
+        "phase": { "type": "string" },
+        "displayName": { "type": "string" },
+        "labels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "spec": {
+      "type": "object",
+      "required": ["id", "identity", "policy"],
+      "properties": {
+        "id": { "type": "string" },
+        "identity": { "type": "string" },
+        "policy": { "type": "string" },
+        "description": { "type": ["string", "null"] },
+        "arenas": {
+          "type": "object",
+          "properties": {
+            "selector": {
+              "type": "object",
+              "properties": {
+                "matchLabels": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" }
+                }
+              },
+              "required": ["matchLabels"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["selector"],
+          "additionalProperties": false
+        },
+        "referees": {
+          "type": "object",
+          "properties": {
+            "selector": {
+              "type": "object",
+              "properties": {
+                "matchLabels": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" }
+                }
+              },
+              "required": ["matchLabels"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["selector"],
+          "additionalProperties": false
+        },
+        "players": {
+          "type": "object",
+          "properties": {
+            "selector": {
+              "type": "object",
+              "properties": {
+                "matchLabels": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" }
+                }
+              },
+              "required": ["matchLabels"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["selector"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

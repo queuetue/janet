@@ -1,0 +1,50 @@
+plan:
+  targetPhase: setup
+  defaultInstanceMode: immediate
+  preflight:
+    description: py:"Deploy base infra like Redis/NATS in {plan_dir}."
+    selector:
+      matchLabels:
+        phase: preflight
+    onFailure:
+      action: raise
+      spec:
+        message: 
+        - js:"Preflight checks failed for ${plan_file}, please check the logs."
+        notify:
+          email: oncall@team.com
+          slack: "#ops-alerts"
+  initialization:
+    description: Generate IDs, slugs, and other initial data.
+    selector:
+      matchLabels:
+        phase: expr:'(concat init_ ${plan_file})'
+    waitFor:
+      phases:
+        - preflight
+      timeout: 300ms        
+    retry:
+      maxAttempts: expr:'(py "{plan_dir}/config/max_attempts.txt")'
+    onFailure:
+      action: continue
+      spec:
+        message: 
+        - "Initialization failed, please check the logs."
+        - go:"We will continue with defaults for {{ .plan_file }}."
+        labels:
+          initialization: defaults
+    onSuccess:
+      spec:
+        message: 
+        - "Initialization completed successfully."
+        notify:
+          email: oncall@team.com
+  setup:
+    description: Set up game board and initial state.
+    selector:
+      matchLabels:
+        phase: setup
+    waitFor: 
+      phases: [initialization]
+    retry:
+      maxAttempts: "10"

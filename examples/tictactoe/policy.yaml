@@ -1,0 +1,25 @@
+apiVersion: plantangenet.policy/v1
+kind: Policy
+name: ttt
+metadata:
+  annotations:
+    description: Policy for the TTT game
+    displayName: TTT Policy
+  labels:
+    policy: ttt
+spec:
+  lifecycle:
+    phases: 
+      - setup
+      - lazy
+  sessionRef: 
+    name: ttt
+  identities:
+    immutable:
+      - name: owner
+  roles:
+    immutable:
+      - name: owner
+    selector:
+      matchLabels:
+        session: ttt

@@ -1,0 +1,159 @@
+---
+apiVersion: plantangenet.policy/v1
+kind: IdentityAllowedStatement
+metadata:
+    name: allow-owner-access
+    namespace: tictactoe
+    annotations:
+        displayName: Allow Owner Access
+        description: |
+            Allows the owner to access the TTT session.
+spec:
+    policyBinding: ttt
+    action: tictactoe.access
+    effect: allow
+    identities:
+        - identitySelector: 
+            identityBinding: owner
+    lifecycle:
+        phases: 
+            - setup
+            - lazy
+---
+apiVersion: plantangenet.policy/v1
+kind: RoleAllowedStatement
+metadata:
+    name: allow-play-in-own-game
+    namespace: tictactoe
+    annotations:
+        displayName: Allow players to play in their own game
+        description: |
+            As a courtesy, players are allowed to play in their own game.
+spec:
+    policyBinding: ttt
+    action: tictactoe.play
+    effect: allow
+    conditions:
+        - roleSelector: 
+            roleBinding: owner
+        - valueMatch:
+            key: target.game
+            operator: equals
+            value: self.resource
+    lifecycle:
+        phases: 
+            - setup
+            - lazy
+---
+apiVersion: plantangenet.policy/v1
+kind: RoleAllowedStatement
+metadata:
+    name: allow-game-creation
+    namespace: tictactoe
+    annotations:
+        displayName: Allow game creation
+        description: |
+            Allows the owner to create a new game.
+spec:
+    action: tictactoe.create
+    effect: allow
+    conditions:
+        - roleSelector: 
+            roleBinding: owner
+    lifecycle:
+        phases: 
+            - setup
+            - lazy
+    policyBinding: ttt
+---
+apiVersion: plantangenet.policy/v1
+kind: RoleAllowedStatement
+metadata:
+    name: allow-game-deletion
+    namespace: tictactoe
+    annotations:
+        displayName: Allow game deletion
+        description: |
+            Allows the owner to delete a game that is inactive.
+spec:
+    action: tictactoe.delete
+    effect: allow
+    conditions:
+        - roleSelector: 
+            roleBinding: owner
+        - valueMatch:
+            key: target.status
+            operator: equals
+            value: inactive
+    lifecycle:
+        phases: 
+            - setup
+            - lazy
+    policyBinding: ttt
+---
+apiVersion: plantangenet.policy/v1
+kind: RoleAllowedStatement
+metadata:
+    name: allow-game-update
+    namespace: tictactoe
+    annotations:
+        displayName: Allow game updates
+        description: |
+            Allows the owner to update a game, but only if the game is inactive.
+spec:
+    action: tictactoe.update
+    effect: allow
+    conditions:
+        - scriptMatch:
+            lang: python
+            entrypoint: check
+            code: |
+                def check(context, target):
+                    """
+                    Check if the target status is inactive.
+                    """
+                    return target.status == "inactive"
+        - roleSelector: 
+            roleBinding: owner
+    lifecycle:
+        phases: 
+            - setup
+            - lazy
+    policyBinding: ttt
+---
+apiVersion: plantangenet.policy/v1
+kind: RoleAllowedStatement
+metadata:
+    name: allow-game-update-js
+    namespace: tictactoe
+    annotations:
+        displayName: Allow game updates with JavaScript
+        description: |
+            Allows the owner to update a game, but only if the game is inactive.
+spec:
+    action: tictactoe.update
+    effect: allow
+    conditions:
+        - scriptMatch:
+            lang: javascript
+            entrypoint: checkIt
+            code: |
+                function checkIt(context, target) {
+                    /**
+                    * Check if the target status is inactive.
+                    */
+                    return target.status === "inactive";
+                }
+        - scriptMatch:
+            lang: javascript
+            entrypoint: check
+            configMapRef: 
+                name: tictactoe-scripts
+                key: f:"{session.PLANTANGENET}scripts/check_local.js"
+        - roleSelector: 
+            roleBinding: owner
+    lifecycle:
+        phases: 
+            - setup
+            - lazy
+    policyBinding: ttt

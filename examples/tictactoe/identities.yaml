@@ -1,0 +1,8 @@
+apiVersion: plantangenet.policy/v1
+kind: Identity
+metadata:
+    displayName: Session Identity
+    description: Identity for the TTT session
+spec:
+    phase: setup
+    name: tictactoe_identity

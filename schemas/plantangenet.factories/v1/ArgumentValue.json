@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ArgumentValue Factory",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "enum": ["plantangenet.factories/v1"]
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["ArgumentValue"]
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "phase"],
+      "properties": {
+        "name": { "type": "string" },
+        "phase": { "type": "string" },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "spec": {
+      "type": "object",
+      "required": ["references"],
+      "properties": {
+        "references": {
+          "type": "object",
+          "patternProperties": {
+            ".*": {
+              "type": "object",
+              "required": ["define"],
+              "properties": {
+                "define": { "type": "string" },
+                "default": { "type": ["integer", "string"] },
+                "shellVar": { "type": "string" }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

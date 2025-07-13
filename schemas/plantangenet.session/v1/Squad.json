@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Squad Resource",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "type": "string", "enum": ["plantangenet.session/v1"] },
+    "kind": { "type": "string", "enum": ["Squad"] },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "phase"],
+      "properties": {
+        "name": { "type": "string" },
+        "phase": { "type": "string" },
+        "labels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "spec": {
+      "type": "object",
+      "required": ["session_id", "class"],
+      "properties": {
+        "session_id": { "type": "string" },
+        "class": { "type": "string" },
+        "max_members": { "type": ["integer", "string"] }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
