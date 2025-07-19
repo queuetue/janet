@@ -3,12 +3,12 @@ import json
 import os
 import sys
 import yaml
+import requests
 from pathlib import Path
 from typing import Dict, Any, Optional
 from jsonschema import validate, ValidationError
 from meatball import preprocess_yaml_string
 
-from .helpers import save_render_json, load_pickle_state, save_pickle_state
 from .plan_transformer import PlanTransformer
 from .plan_renderer import PlanRenderer
 from .phase_executor import PhaseExecutor
@@ -43,6 +43,29 @@ class JanetCLI:
         render_parser.add_argument(
             "--output", type=str, help="The output file for the rendered plan"
         )
+        render_parser.add_argument(
+            "--format", type=str, choices=["json", "yaml"], default="json", 
+            help="Output format (default: json for PMP compatibility)"
+        )
+
+        # Define the 'submit' command
+        submit_parser = self.subparsers.add_parser(
+            "submit", help="Submit a rendered plan to a PMP server"
+        )
+        submit_parser.add_argument(
+            "-d", "--directory", type=str, default=None, help="Directory containing the plan file (default: current directory)"
+        )
+        submit_parser.add_argument(
+            "-f", "--file", type=str, default=None, help="Plan file name (default: plan.yaml) or rendered JSON file"
+        )
+        submit_parser.add_argument(
+            "--endpoint", type=str, default="http://localhost:3030", 
+            help="PMP server endpoint (default: http://localhost:3030)"
+        )
+        submit_parser.add_argument(
+            "--dry-run", action="store_true", 
+            help="Perform a dry run submission"
+        )
 
         # Define the 'validate' command
         validate_parser = self.subparsers.add_parser(
@@ -55,19 +78,6 @@ class JanetCLI:
             "-f", "--file", type=str, default=None, help="Plan file name (default: plan.yaml)"
         )
 
-        # Define the 'execute' command
-        execute_parser = self.subparsers.add_parser(
-            "execute", help="Execute a plan"
-        )
-        execute_parser.add_argument(
-            "-d", "--directory", type=str, default=None, help="Directory containing the plan file (default: current directory)"
-        )
-        execute_parser.add_argument(
-            "-f", "--file", type=str, default=None, help="Plan file name (default: plan.yaml)"
-        )
-        execute_parser.add_argument(
-            "--timeout", type=float, default=None, help="Timeout in seconds for plan execution"
-        )
 
     def resolve_plan_path(self):
         """Resolve the plan file path based on CLI options (-d, -f).
@@ -98,8 +108,8 @@ class JanetCLI:
             self.render_plan()
         elif command == "validate":
             self.validate_plan()
-        elif command == "execute":
-            self.execute_plan()
+        elif command == "submit":
+            self.submit_plan()
         else:
             self.parser.print_help()
 
@@ -107,6 +117,7 @@ class JanetCLI:
         """Render a plan using the PlanRenderer with optional Meatball macro expansion."""
         plan_path = self.resolve_plan_path()
         output_path = self.args.get("output")
+        output_format = self.args.get("format", "json")
 
         # Load and preprocess the plan
         plan = self.load_and_preprocess_plan(plan_path)
@@ -118,11 +129,69 @@ class JanetCLI:
         # Save the rendered plan to the output file or print it
         if output_path:
             with open(output_path, "w") as output_file:
-                yaml.dump(rendered_plan, output_file)
+                if output_format == "json":
+                    json.dump(rendered_plan, output_file, indent=2)
+                else:
+                    yaml.dump(rendered_plan, output_file)
             print(f"Rendered plan saved to {output_path}")
         else:
             print("Rendered plan:")
-            print(yaml.dump(rendered_plan))
+            if output_format == "json":
+                print(json.dumps(rendered_plan, indent=2))
+            else:
+                print(yaml.dump(rendered_plan))
+
+    def submit_plan(self):
+        """Submit a rendered plan to a PMP server."""
+        plan_path = self.resolve_plan_path()
+        endpoint = self.args.get("endpoint", "http://localhost:3030")
+        dry_run = self.args.get("dry_run", False)
+
+        # Check if the file is already rendered JSON or needs rendering
+        if plan_path.endswith('.json'):
+            # Load pre-rendered JSON
+            with open(plan_path, "r") as f:
+                rendered_plan = json.load(f)
+        else:
+            # Load and render YAML plan
+            plan = self.load_and_preprocess_plan(plan_path)
+            renderer = PlanRenderer(plan)
+            rendered_plan = renderer.render()
+
+        # Submit to PMP server
+        url = f"{endpoint}/plan"
+        headers = {
+            "Content-Type": "application/vnd.phase-manifest+json"
+        }
+
+        try:
+            print(f"Submitting plan to {url}...")
+            if dry_run:
+                print("DRY RUN - Plan that would be submitted:")
+                print(json.dumps(rendered_plan, indent=2))
+                return
+
+            response = requests.post(url, json=rendered_plan, headers=headers)
+            
+            if response.status_code == 200:
+                print("Plan submitted successfully!")
+                if response.text:
+                    print("Server response:", response.text)
+            elif response.status_code == 400:
+                print("Bad Request: Invalid manifest")
+                print("Response:", response.text)
+            elif response.status_code == 409:
+                print("Conflict: Already executing or conflicting manifest")
+                print("Response:", response.text)
+            else:
+                print(f"Unexpected response: {response.status_code}")
+                print("Response:", response.text)
+                
+        except requests.exceptions.ConnectionError:
+            print(f"Error: Could not connect to PMP server at {endpoint}")
+            print("Make sure the server is running and accessible.")
+        except Exception as e:
+            print(f"Error submitting plan: {e}")
 
     def load_and_preprocess_plan(self, plan_path):
         """Load and preprocess a plan file with optional Meatball macro expansion.
@@ -170,44 +239,6 @@ class JanetCLI:
         except ValidationError as e:
             print(f"Plan is invalid: {e.message}")
 
-    def execute_plan(self, timeout: float = 0):
-        """Execute a plan: instantiate all resources and keep running until killed or timeout."""
-        plan_path = self.resolve_plan_path()
-
-        # Load and preprocess the plan
-        plan = self.load_and_preprocess_plan(plan_path)
-
-        executor = PhaseExecutor()
-        phases = plan.get("phases", [])
-        resources = []
-        for phase in phases:
-            phase_spec = phase.get("spec", {})
-            phase_resource = PhaseResource(phase_spec)
-            resources.append(phase_resource)
-            metadata = phase.get("metadata", {})
-            name = metadata.get("name")
-            display_name = metadata.get("annotations", {}).get("displayName")
-            label = name or display_name or phase_resource.id or "Unknown"
-            result = executor.execute(phase_resource)
-            print(f"Phase {label} execution result: {result}")
-        print("Instantiated resources:")
-        for r, phase in zip(resources, phases):
-            metadata = phase.get("metadata", {})
-            name = metadata.get("name")
-            display_name = metadata.get("annotations", {}).get("displayName")
-            label = name or display_name or getattr(r, 'id', None) or "Unknown"
-            print(f"- {label}: {r}")
-        print("System running. Press Ctrl-C to exit.")
-        import time
-        start = time.time()
-        try:
-            while True:
-                if timeout > 0 and (time.time() - start) > timeout:
-                    print("\nSystem timed out.")
-                    break
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("\nSystem terminated.")
 
     def get_plan_schema(self):
         """Get the JSON schema for plan validation.

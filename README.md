@@ -1,143 +1,142 @@
 # Janet
 
-Janet is a command-line tool for managing and automating YAML-based "plans". It provides a simple interface for rendering, validating, and executing plans, making it easy to build and operate declarative workflows.
+**Janet** is a command-line tool for authoring, expanding, validating, and submitting declarative YAML-based *plans*. It serves as a frontend for workflow execution systems — rendering plans from source files and sending them to compatible runtimes for dry-run, apply, or inspection.
+
+Janet focuses on transformation and communication — helping humans write plans and systems understand them.
+
+---
 
 ## Features
-- **Render**: Load and render a plan file, optionally saving the output.
-- **Validate**: Check a plan file against a JSON schema to ensure correctness.
-- **Execute**: Run the plan using a phase-based executor.
-- **Macro Expansion**: Uses [Meatball](https://github.com/queuetue/meatball) for safe, pluggable macro expansion and preprocessing of YAML plans.
 
-## Meatball Integration
-Janet leverages the [Meatball](https://github.com/queuetue/meatball) library to preprocess and expand macros in YAML plans. This enables:
-- Safe, auditable macro expansion in YAML files
-- Support for inline, s-expression, list, and block macros
-- Pluggable engines for custom templating (Python, JavaScript, Go templates, etc.)
-- Pipeline processing for staged transformations
+* **Macro Expansion**: Leverages [Meatball](https://github.com/queuetue/meatball) for safe, auditable macro expansion inside YAML plans.
+* **Validation**: Confirms plan structure against a JSON Schema, ensuring well-formed output.
+* **Render**: Converts macro-enhanced YAML into a fully interpolated JSON plan.
+* **Submit**: Sends rendered plans to a running plan executor (like [Planter](https://github.com/queuetue/planter)) over HTTP.
+* **Status Check** *(planned)*: Queries remote execution state and differences.
 
-### Macro Expansion Context
-When Janet processes a plan file, it provides the following context variables for macro expansion:
-- `plan_dir`: The directory containing the plan file
-- `plan_file`: The name of the plan file
+---
 
-### Example Plan with Macros
+## Intended Flow
+
+1. Author a macro-enhanced YAML plan file.
+2. Use Janet to expand, validate, and render it.
+3. Submit the rendered plan to a running executor.
+4. Use Janet to view diffs, logs, or current status.
+
+---
+
+## Macro Expansion
+
+Janet integrates deeply with [Meatball](https://github.com/queuetue/meatball), a macro processing engine for YAML/JSON pipelines. This enables:
+
+* Inline string expansion (`py:"Hello {plan_file}"`)
+* S-expression and list macros
+* Embedded block templates
+* Support for templating in Python, JavaScript, Go templates, and more
+
+### Context Provided to Macros
+
+When expanding, Janet passes:
+
+* `plan_dir`: The directory containing the plan
+* `plan_file`: The plan’s filename (e.g. `plan.yaml`)
+
+### Example
+
 ```yaml
 phases:
   - metadata:
       name: preflight
-      annotations:
-        displayName: "Preflight Checks"
-      labels:
-        phase: preflight
     spec:
-      description: py:"Deploy base infra in {plan_dir}."
+      description: py:"Deploy infra from {plan_file}"
       selector:
         matchLabels:
           phase: js:"${plan_file}_preflight"
-      onFailure:
-        spec:
-          message:
-            - go:"Preflight checks failed for {{ .plan_file }}"
 ```
 
-### Macro Forms Supported
-Janet supports all Meatball macro forms:
-
-1. **Inline macros**: `py:"Hello {name}"`, `js:"${variable}/path"`
-2. **S-expression macros**: `expr:'(concat foo /bar.js)'`
-3. **List macros**: `[js, "${variable}/path"]`
-4. **Block macros**: `{engine: py, template: "Hello {name}"}`
-
-### Macro Expansion Process
-1. Janet loads the raw YAML file
-2. If Meatball is available, macro expansion is applied with plan context
-3. The expanded YAML is then processed by Janet's rendering pipeline
-4. If Meatball is not available, Janet falls back to standard YAML loading
+---
 
 ## Usage
-```
-janet [render|validate|execute] [-d DIR] [-f FILE] [--output OUTPUT]
+
+```bash
+janet [render|validate|submit] [-d DIR] [-f FILE] [--output FILE]
 ```
 
 ### Commands
-- `render`: Render a plan and optionally save the output.
-- `validate`: Validate a plan against the schema.
-- `execute`: Execute a plan.
 
-## Flexible Plan Selection
-Janet supports flexible plan file selection using the `-d` (directory) and `-f` (file) options:
+* `render`: Expand and convert a YAML plan into JSON.
+* `validate`: Ensure rendered plans match the expected schema.
+* `submit`: Send the rendered plan to a remote executor via HTTP.
 
-- `-d <directory>`: Specify the directory containing the plan file (defaults to current directory).
-- `-f <file>`: Specify the plan file name (defaults to `plan.yaml`).
+---
 
-**Default Behavior:**
-If you specify only the `-d` option, Janet will automatically look for `plan.yaml` in that directory. This makes it easy to run commands on standard plan files without specifying the filename each time.
+## Examples
 
-**Examples:**
+```bash
+# Expand and validate a plan
+janet render -d examples/tictactoe --output rendered.json
+janet validate -f rendered.json
+
+# Submit to a running server
+janet submit --endpoint http://localhost:3030 --file rendered.json
 ```
-# Render the default plan.yaml in the examples/tictactoe directory
+
+Or in a one-liner:
+
+```bash
+janet render -d myplan | janet submit --endpoint http://planter.local:3030
+```
+
+---
+
+## File Selection
+
+By default, Janet looks for `plan.yaml` in the current or specified directory. Use `-f` to specify an alternate filename.
+
+```bash
+# Use examples/tictactoe/plan.yaml
 janet render -d examples/tictactoe
 
-# Validate the default plan.yaml in a directory
-janet validate -d examples/tictactoe
-
-# Execute the default plan.yaml in a directory
-janet execute -d examples/tictactoe
+# Use a custom file
+janet render -f custom.yaml
 ```
 
-If you want to use a different filename, add the `-f` option:
-```
-janet render -d examples/tictactoe -f custom_plan.yaml
-```
-
-You can also use `--output` with `render` to save the rendered plan.
-
-## Example
-```
-janet render plan.yaml --output rendered.yaml
-janet validate plan.yaml
-janet execute plan.yaml
-```
-
-## Example Output
-When you run Janet with the `render` command, you will see the rendered plan as a list of phase objects:
-
-```
-$ janet render -d examples/tictactoe
-Rendered plan:
-- !!python/object:janet.phase_resource.PhaseResource
-  id: preflight
-  kind: Phase
-  spec:
-    description: Deploy base infra like Redis/NATS.
-    ...
-- !!python/object:janet.phase_resource.PhaseResource
-  id: initialization
-  kind: Phase
-  spec:
-    description: Generate IDs, slugs, and other initial data.
-    ...
-- !!python/object:janet.phase_resource.PhaseResource
-  id: setup
-  kind: Phase
-  spec:
-    description: Set up game board and initial state.
-    ...
-```
-
-Each phase is rendered as a Python object with its configuration. You can use `--output` to save this to a file.
+---
 
 ## Installation
+
 Clone the repo and install in editable mode:
-```
+
+```bash
+git clone https://github.com/queuetue/janet
+cd janet
 pip install -e .
 ```
 
-## Requirements
-- Python 3.8+
-- PyYAML
-- jsonschema
-- meatball
+---
 
+## Requirements
+
+* Python 3.8+
+* `PyYAML`
+* `jsonschema`
+* [`meatball`](https://github.com/queuetue/meatball)
+
+---
+
+## Compatibility
+
+Janet emits plans in a well-defined JSON format that can be consumed by any compliant runtime. It is currently tested against [Planter](https://github.com/queuetue/planter), but is not limited to any single backend.
+
+---
+
+Immediate TODO:
+[X] remove execution system (provided by planter server, see PROTOCOL.md)
+[X] fix errors that prevent current examples from running
+[ ] remove state system (or move to local testing only - see PROTOCOL.md)
+[ ] interface to planter for storage (see PROTOCOL.md)
+
+---
 ## License
-MIT
+
+MIT © 2025 [Queuetue, LLC](https://queuetue.com)

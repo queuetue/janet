@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-import pickle
 import re
 
 
@@ -41,28 +40,3 @@ def save_state_file(directory, state):
         json.dump(state, f, indent=2)
 
 
-def save_pickle_state(directory, state):
-    path = Path(directory) / ".plan_state.pickle"
-    backup = path.with_suffix(".plan_state.pickle.bak")
-    if path.exists():
-        path.rename(backup)
-    with open(path, "wb") as f:
-        pickle.dump(state, f)
-
-
-def load_pickle_state(directory="."):
-    path = Path(directory) / ".plan_state.pickle"
-    if path.exists():
-        with open(path, "rb") as f:
-            return pickle.load(f)
-    return []
-
-
-def save_render_json(directory, plan_resources):
-    path = Path(directory) / ".plan_render.json"
-
-    def resource_to_dict(r):
-        return {"kind": r.kind, "id": r.id, "spec": r.spec}
-    data = [resource_to_dict(r) for r in plan_resources]
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)

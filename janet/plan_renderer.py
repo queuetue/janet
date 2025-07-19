@@ -4,7 +4,11 @@ from .phase_resource import PhaseResource
 class PlanRenderer:
     def __init__(self, raw_planfile):
         # Support both old interface (single plan dict) and new interface (list of manifests)
-        if isinstance(raw_planfile, dict) and "plan" in raw_planfile:
+        if isinstance(raw_planfile, dict) and "phases" in raw_planfile:
+            # New YAML format with phases array
+            self.phases = raw_planfile["phases"]
+            self.all_resources = []
+        elif isinstance(raw_planfile, dict) and "plan" in raw_planfile:
             # Old interface: single plan file
             self.plan_section = raw_planfile["plan"]
             self.all_resources = []
@@ -22,7 +26,34 @@ class PlanRenderer:
                 "PlanRenderer expects either a plan dict or list of manifests")
 
     def render(self, target_phase=None):
+        """Render plan into PMP-compliant Phase Manifest format."""
         result = []
+        
+        # Handle new phases array format (PMP-style)
+        if hasattr(self, 'phases') and self.phases:
+            for phase in self.phases:
+                metadata = phase.get("metadata", {})
+                spec = phase.get("spec", {})
+                phase_id = metadata.get("name") or f"phase-{len(result)}"
+                
+                # Convert to PMP format
+                pmp_phase = {
+                    "Kind": "Phase",
+                    "Id": phase_id,
+                    "Spec": {
+                        "description": spec.get("description", ""),
+                        "selector": self._convert_selector_to_snake_case(spec.get("selector", {})),
+                        "instance_mode": spec.get("instanceMode", "immediate"),
+                        "wait_for": self._convert_wait_for_to_snake_case(spec.get("waitFor", {})),
+                        "retry": spec.get("retry", {}),
+                        "on_failure": spec.get("onFailure", {}),
+                        "on_success": spec.get("onSuccess", {})
+                    }
+                }
+                result.append(pmp_phase)
+            return result
+        
+        # Handle legacy plan format
         plan = self.plan_section
 
         # Same as before
@@ -41,17 +72,23 @@ class PlanRenderer:
             phase_config = phases[phase_name]
             instance_mode = phase_config.get('instanceMode', default_mode)
 
-            # Add PhaseResource for orchestration
+            # Create PMP-compliant phase
             spec = {
                 'description': phase_config.get('description', ''),
-                'selector': phase_config.get('selector', {}),
-                'instanceMode': instance_mode,
-                'waitFor': phase_config.get('waitFor', {}),
+                'selector': self._convert_selector_to_snake_case(phase_config.get('selector', {})),
+                'instance_mode': instance_mode,
+                'wait_for': self._convert_wait_for_to_snake_case(phase_config.get('waitFor', {})),
                 'retry': phase_config.get('retry', {}),
-                'onFailure': phase_config.get('onFailure', {}),
-                'onSuccess': phase_config.get('onSuccess', {})
+                'on_failure': phase_config.get('onFailure', {}),
+                'on_success': phase_config.get('onSuccess', {})
             }
-            result.append(PhaseResource(phase_name, spec))
+            
+            pmp_phase = {
+                "Kind": "Phase",
+                "Id": phase_name,
+                "Spec": spec
+            }
+            result.append(pmp_phase)
 
             # NEW: apply selector to find matching resources
             selector = phase_config.get('selector', {})
@@ -119,4 +156,30 @@ class PlanRenderer:
                 visit(phase)
         except StopIteration:
             pass
+        return result
+
+    def _convert_selector_to_snake_case(self, selector):
+        """Convert selector from camelCase to snake_case for PMP compatibility."""
+        if not selector:
+            return selector
+        
+        result = {}
+        for key, value in selector.items():
+            if key == "matchLabels":
+                result["match_labels"] = value
+            else:
+                result[key] = value
+        return result
+
+    def _convert_wait_for_to_snake_case(self, wait_for):
+        """Convert waitFor from camelCase to snake_case for PMP compatibility.""" 
+        if not wait_for:
+            return wait_for
+        
+        result = {}
+        for key, value in wait_for.items():
+            if key == "dependsOn":
+                result["depends_on"] = value
+            else:
+                result[key] = value
         return result
